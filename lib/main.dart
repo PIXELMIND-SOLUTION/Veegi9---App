@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:veeginine/providers/auth_provider.dart';
 import 'package:veeginine/views/login_screen.dart';
 import 'package:veeginine/views/map_waiting_screen.dart';
 import 'package:veeginine/views/onboard_screen.dart';
@@ -12,14 +14,19 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Veeginine',
-      theme: ThemeData(
-        scaffoldBackgroundColor: Colors.white,
-        useMaterial3: true,
+    return MultiProvider(
+            providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+      ],
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'Veeginine',
+        theme: ThemeData(
+          scaffoldBackgroundColor: Colors.white,
+          useMaterial3: true,
+        ),
+        home: const SplashScreen(),
       ),
-      home: const SplashScreen(),
     );
   }
 }
