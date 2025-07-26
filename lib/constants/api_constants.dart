@@ -3,9 +3,10 @@ class ApiConstants {
 
   // Auth Endpoints
   static const String register = '$baseUrl/register';
-  static const String verifyotp = '$baseUrl/verify-otp';
-  static const String setpassword = '$baseUrl/set-password';
+  static const String verifyOtp = '$baseUrl/verify-otp';
+  static const String setPassword = '$baseUrl/set-password';
   static const String login = '$baseUrl/login';
-  
 
+  // Location Endpoint (reusable with userId)
+  static String userLocation(String userId) => '$baseUrl/location/$userId';
 }

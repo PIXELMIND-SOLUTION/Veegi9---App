@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:veeginine/helper/storage_helper.dart';
+import 'package:veeginine/providers/location_provider.dart';
 import 'package:veeginine/views/menu_screen.dart';
 import 'package:veeginine/views/notification_screen.dart';
+import 'package:veeginine/views/search_screen.dart';
+import 'package:animated_text_kit/animated_text_kit.dart';
+import 'package:veeginine/views/widgets/searchbar.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -10,6 +16,84 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  String? userId;
+  bool _isInitializing = true;
+  bool isLoadingCurrentLocation = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeData();
+  }
+
+  Future<void> _initializeData() async {
+    try {
+      // Load user ID first
+      await _loadUserId();
+      await _handleCurrentLocation();
+
+      // Initialize providers in parallel
+      // await Future.wait([
+      //   Provider.of<CategoryProvider>(context, listen: false).fetchCategories(),
+      //   if (userId != null) _handleCurrentLocation(),
+      // ]);
+    } catch (e) {
+      debugPrint('Initialization error: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isInitializing = false);
+      }
+    }
+  }
+
+  Future<void> _loadUserId() async {
+    final user = UserPreferences.getUser();
+    if (user != null && mounted) {
+      setState(() {
+        userId = user.userId;
+      });
+    }
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  Future<void> _handleCurrentLocation() async {
+    setState(() {
+      isLoadingCurrentLocation = true;
+    });
+
+    try {
+      final locationProvider =
+          Provider.of<LocationProvider>(context, listen: false);
+      await locationProvider.initLocation(userId.toString());
+
+      if (mounted) {
+        if (locationProvider.hasError) {
+          _showError(locationProvider.errorMessage);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        _showError("Failed to get current location: ${e.toString()}");
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoadingCurrentLocation = false;
+        });
+      }
+    }
+  }
+
   final List<Map<String, dynamic>> _categories = [
     {'title': 'Biryani', 'image': "assets/biryani.png"},
     {'title': 'Meals', 'image': "assets/meals.png"},
@@ -67,98 +151,119 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final double textScaleFactor = MediaQuery.of(context).textScaleFactor;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 255, 255, 255),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         automaticallyImplyLeading: false,
-        titleSpacing: 0,
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        titleSpacing: 16,
+        title: const Row(
           children: [
-            Row(
-              children: const [
-                SizedBox(width: 16),
-                Icon(Icons.home_outlined, color: Colors.black),
-                SizedBox(width: 8),
-                Text(
-                  'Home',
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                  ),
-                ),
-              ],
-            ),
-            Row(
-              children: [
-                const Column(
-                  children: [
-                    Icon(Icons.location_on_outlined,
-                        size: 20, color: Colors.grey),
-                    SizedBox(width: 4),
-                    Text(
-                      'Kakinada',
-                      style: TextStyle(color: Colors.black, fontSize: 12),
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 16),
-                IconButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => NotificationScreen(),
-                      ),
-                    );
-                  },
-                  icon: const Icon(
-                    Icons.notifications_outlined,
-                    color: Colors.black,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 12),
-              ],
+            Icon(Icons.home_outlined, color: Colors.black),
+            SizedBox(width: 8),
+            Text(
+              'Home',
+              style: TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+              ),
             ),
           ],
         ),
+        actions: [
+          Row(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(right: 8.0),
+                child: Consumer<LocationProvider>(
+                  builder: (context, locationProvider, child) {
+                    return GestureDetector(
+                      onTap: () async {
+                        final result = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                LocationSearchScreen(userId: userId.toString()),
+                          ),
+                        );
+
+                        if (result == true && context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content:
+                                  Text('Updating cars for new location...'),
+                              backgroundColor: Colors.blue,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 4),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.location_on_outlined,
+                              size: 24,
+                              color: Color(0XFF120698),
+                            ),
+                            if (locationProvider.isLoading)
+                              const Text(
+                                'Fetching...',
+                                style:
+                                    TextStyle(fontSize: 11, color: Colors.grey),
+                              )
+                            else if (locationProvider.hasError)
+                              const Text(
+                                'Tap to set location',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0XFF120698),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              )
+                            else
+                              Text(
+                                locationProvider.address,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: Icon(
+                  Icons.notifications_none_outlined,
+                  size: 34,
+                ),
+              )
+            ],
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             // Search Bar
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.withOpacity(0.1),
-                      spreadRadius: 1,
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: 'Search',
-                    prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                    suffixIcon: const Icon(Icons.tune, color: Colors.grey),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                  ),
-                ),
-              ),
-            ),
+           SearchBarWithAnimatedHint(),
 
             // Food Delivery Banner
             Image.asset("assets/carousel.png"),
